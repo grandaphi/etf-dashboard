@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETF Pro Terminal</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0a0c10">
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <style>
+        :root {
+            --bg: #080a0f; --panel: #11151f; --line: #1e2738;
+            --text: #e6edf7; --muted: #8b9ab4; --accent: #00ffcc;
+            --up: #2ee6a8; --down: #ff5c7a;
+        }
+        body {
+            margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            background: radial-gradient(1200px 620px at 50% -15%, #141c2e 0%, var(--bg) 62%);
+            color: var(--text);
+            font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
+        }
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 22px; background: rgba(17, 21, 31, 0.85);
+            border-bottom: 1px solid var(--line);
+        }
+        .controls { display: flex; gap: 12px; align-items: center; }
+        select, button {
+            background-color: #1a2130; color: var(--text); border: 1px solid #31405c;
+            padding: 9px 14px; border-radius: 8px; cursor: pointer; font-weight: 600;
+            font-size: 14px; transition: border-color .15s ease, background-color .15s ease;
+        }
+        select:hover, button:hover { border-color: var(--accent); background-color: #212a3d; }
+        select:focus, button:focus { border-color: var(--accent); outline: none; }
+        .btn-active {
+            background-color: var(--accent) !important; color: #08101a !important;
+            border-color: var(--accent) !important;
+        }
+        #ticker-bar {
+            display: flex; align-items: baseline; gap: 18px;
+            padding: 14px 26px 10px; border-bottom: 1px solid var(--line);
+            background: rgba(17, 21, 31, 0.85);
+        }
+        #ticker-symbol { font-size: 46px; font-weight: 800; letter-spacing: 3px; line-height: 1; }
+        #ticker-name { font-size: 16px; color: var(--muted); }
+        #ticker-price { margin-left: auto; font-size: 30px; font-weight: 700; }
+        #ticker-change { font-size: 20px; font-weight: 700; }
+        .up { color: var(--up); } .down { color: var(--down); }
+        #dashboard-grid { flex: 1; min-height: 0; display: flex; padding: 12px 14px 8px; box-sizing: border-box; }
+        .chart-box { flex: 1; min-height: 0; }
+        .cast-icon { font-size: 20px; display: inline-flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="controls">
+        <select id="etfSelect" onchange="loadDashboard()">
+            <option value="VGS">VGS - International</option>
+            <option value="VAS">VAS - Aussie</option>
+            <option value="IVV">IVV - S&P 500</option>
+            <option value="HNDQ">HNDQ - Nasdaq</option>
+            <option value="SMH">SMH - Semiconductor</option>
+            <option value="EMKT">EMKT - Emerging</option>
+            <option value="GOAT">GOAT - Moat</option>
+            <option value="QUAL">QUAL - Quality</option>
+        </select>
+        
+        <select id="horizonSelect" onchange="loadDashboard()">
+            <option value="1w">1 Week</option>
+            <option value="1m">1 Month</option>
+            <option value="3m">3 Month</option>
+            <option value="6m">6 Month</option>
+            <option value="12m" selected>12 Month</option>
+            <option value="2y">2 Years</option>
+            <option value="3y">3 Years</option>
+            <option value="5y">5 Years</option>
+            <option value="10y">10 Years</option>
+            <option value="max">Max</option>
+        </select>
+
+        <button id="rotationBtn" onclick="toggleRotation()">🔄 Rotation: OFF</button>
+    </div>
+    
+    <div>
+        <button onclick="triggerCast()" title="Cast / Fullscreen"><span class="cast-icon">📺</span> Fullscreen Cast</button>
+    </div>
+</header>
+
+<section id="ticker-bar">
+    <span id="ticker-symbol">VGS</span>
+    <span id="ticker-name">International</span>
+    <span id="ticker-price">—</span>
+    <span id="ticker-change">—</span>
+</section>
+
+<div id="dashboard-grid">
+    <div id="mainPriceChart" class="chart-box"></div>
+</div>
+
+<script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js'); }
+
+    let rotationInterval = null;
+    const etfList = ['VGS', 'VAS', 'IVV', 'HNDQ', 'SMH', 'EMKT', 'GOAT', 'QUAL'];
+    let currentEtfIdx = 0;
+
+    async function loadDashboard() {
+        const etf = document.getElementById('etfSelect').value;
+        const horizon = document.getElementById('horizonSelect').value;
+        
+        try {
+            const res = await fetch(`/api/data/${etf}/${horizon}`);
+            const d = await res.json();
+            renderCharts(etf, d);
+            renderTicker(etf, d);
+        } catch (e) {
+            console.error("Data tracking fault:", e);
+        }
+    }
+
+    function renderTicker(etf, d) {
+        const label = document.getElementById('etfSelect').selectedOptions[0].textContent;
+        const prices = d.price.filter(v => typeof v === 'number' && isFinite(v));
+        const first = prices[0], last = prices[prices.length - 1];
+        const pct = ((last - first) / first) * 100;
+
+        document.getElementById('ticker-symbol').textContent = etf;
+        document.getElementById('ticker-name').textContent = label.split(' - ')[1] || '';
+        document.getElementById('ticker-price').textContent = `$${last.toFixed(2)}`;
+
+        const change = document.getElementById('ticker-change');
+        change.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+        change.className = pct >= 0 ? 'up' : 'down';
+    }
+
+    function renderCharts(etf, d) {
+        const tracePrice = { x: d.dates, y: d.price, name: 'Price', type: 'scatter', mode: 'lines', line: { color: '#ffffff', width: 2.5 } };
+        const traceSMA = { x: d.dates, y: d.sma20, name: 'SMA 20', type: 'scatter', mode: 'lines', line: { color: '#00ffcc', width: 1.5, dash: 'dash' } };
+        const traceU25 = { x: d.dates, y: d.env_u25, name: '+2.5% Envelope', type: 'scatter', mode: 'lines', line: { color: '#ff007f', width: 1 } };
+        const traceL25 = { x: d.dates, y: d.env_l25, name: '-2.5% Envelope', type: 'scatter', mode: 'lines', line: { color: '#ff007f', width: 1 } };
+        
+        const traceRSI = { x: d.dates, y: d.rsi, name: 'RSI (14)', type: 'scatter', xaxis: 'x2', yaxis: 'y2', line: { color: '#9b5de5', width: 2 } };
+        const traceMACD = { x: d.dates, y: d.macd, name: 'MACD', type: 'scatter', xaxis: 'x3', yaxis: 'y3', line: { color: '#38b000', width: 1.5 } };
+        const traceSignal = { x: d.dates, y: d.signal, name: 'Signal', type: 'scatter', xaxis: 'x3', yaxis: 'y3', line: { color: '#ff5400', width: 1.5 } };
+        
+        const traceHist = { 
+            x: d.dates, y: d.hist, name: 'Histogram', type: 'bar', xaxis: 'x3', yaxis: 'y3',
+            marker: { color: d.hist.map(v => v >= 0 ? '#38b000' : '#ff5400') }
+        };
+
+        const data = [tracePrice, traceSMA, traceU25, traceL25, traceRSI, traceMACD, traceSignal, traceHist];
+
+        const inRange = [d.price, d.sma20, d.env_u25, d.env_l25]
+            .flat().filter(v => typeof v === 'number' && isFinite(v));
+        const lo = Math.min(...inRange), hi = Math.max(...inRange);
+        const pad = (hi - lo) * 0.08 || hi * 0.02;
+
+        const layout = {
+            grid: { rows: 3, columns: 1, pattern: 'independent' },
+            paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: '#0d1119',
+            font: { color: '#e6edf7', size: 11 },
+            showlegend: true,
+            legend: { orientation: 'h', y: 1.08, bgcolor: 'rgba(0,0,0,0)' },
+            margin: { l: 60, r: 24, t: 26, b: 34 },
+            hovermode: 'x unified',
+            
+            xaxis: { gridcolor: '#19212f', showticklabels: false },
+            yaxis: { domain: [0.56, 1], range: [lo - pad, hi + pad], gridcolor: '#19212f', title: 'Price ($)' },
+            xaxis2: { matches: 'x', gridcolor: '#19212f', showticklabels: false },
+            yaxis2: { domain: [0.30, 0.50], range: [0, 100], dtick: 25, gridcolor: '#19212f', title: 'RSI' },
+            xaxis3: { matches: 'x', gridcolor: '#19212f' },
+            yaxis3: { domain: [0, 0.24], gridcolor: '#19212f', zerolinecolor: '#2b3550', title: 'MACD' }
+        };
+
+        layout.shapes = [
+            { type: 'line', x0: d.dates[0], y0: 70, x1: d.dates[d.dates.length-1], y1: 70, xref: 'x2', yref: 'y2', line: { color: '#ff5c7a', width: 1, dash: 'dot' } },
+            { type: 'line', x0: d.dates[0], y0: 30, x1: d.dates[d.dates.length-1], y1: 30, xref: 'x2', yref: 'y2', line: { color: '#2ee6a8', width: 1, dash: 'dot' } }
+        ];
+
+        Plotly.newPlot('mainPriceChart', data, layout, { responsive: true, displayModeBar: false });
+    }
+
+    function toggleRotation() {
+        const btn = document.getElementById('rotationBtn');
+        if (rotationInterval) {
+            clearInterval(rotationInterval);
+            rotationInterval = null;
+            btn.innerHTML = "🔄 Rotation: OFF";
+            btn.classList.remove('btn-active');
+        } else {
+            btn.innerHTML = "🔄 Rotation: ON";
+            btn.classList.add('btn-active');
+            rotationInterval = setInterval(() => {
+                currentEtfIdx = (currentEtfIdx + 1) % etfList.length;
+                document.getElementById('etfSelect').value = etfList[currentEtfIdx];
+                loadDashboard();
+            }, 15000);
+        }
+    }
+
+    function triggerCast() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                alert(`Error transitioning to monitor scan: ${err.message}`);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    window.onload = loadDashboard;
+</script>
+</body>
+</html>
