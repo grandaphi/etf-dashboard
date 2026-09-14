@@ -37,9 +37,18 @@
             border-color: var(--accent) !important;
         }
         #ticker-bar {
-            display: flex; align-items: baseline; gap: 18px;
+            display: flex; align-items: center; gap: 18px;
             padding: 14px 26px 10px; border-bottom: 1px solid var(--line);
             background: rgba(17, 21, 31, 0.85);
+        }
+        #heat-meters { display: flex; gap: 12px; flex: 1; min-width: 220px; max-width: 420px; }
+        .heat { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+        .heat label { font-size: 10px; letter-spacing: 1px; color: var(--muted); font-weight: 700; }
+        .heat-track { height: 10px; border-radius: 999px; background: #1a2130; overflow: hidden; }
+        .heat-fill {
+            height: 100%; width: 0%; border-radius: inherit;
+            background: linear-gradient(90deg, #3d5a80, #00ffcc 55%, #ffb020);
+            transition: width .25s ease;
         }
         #ticker-symbol { font-size: 46px; font-weight: 800; letter-spacing: 3px; line-height: 1; }
         #ticker-name { font-size: 16px; color: var(--muted); }
@@ -82,7 +91,8 @@
         <button id="rotationBtn" onclick="toggleRotation()">🔄 Rotation: OFF</button>
     </div>
     
-    <div>
+    <div class="controls">
+        <button onclick="location.href='/overview'" title="All tickers">📋 Board</button>
         <button onclick="triggerCast()" title="Cast / Fullscreen"><span class="cast-icon">📺</span> Fullscreen Cast</button>
     </div>
 </header>
@@ -90,6 +100,11 @@
 <section id="ticker-bar">
     <span id="ticker-symbol">VGS</span>
     <span id="ticker-name">International</span>
+    <div id="heat-meters" title="Buy heat from the latest RSI, envelope and MACD readings">
+        <div class="heat"><label>RSI</label><div class="heat-track"><div id="heat-rsi" class="heat-fill"></div></div></div>
+        <div class="heat"><label>ENV</label><div class="heat-track"><div id="heat-env" class="heat-fill"></div></div></div>
+        <div class="heat"><label>MACD</label><div class="heat-track"><div id="heat-macd" class="heat-fill"></div></div></div>
+    </div>
     <span id="ticker-price">—</span>
     <span id="ticker-change">—</span>
 </section>
@@ -132,6 +147,19 @@
         const change = document.getElementById('ticker-change');
         change.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
         change.className = pct >= 0 ? 'up' : 'down';
+
+        renderHeat(d.heat || {});
+    }
+
+    function renderHeat(heat) {
+        for (const key of ['rsi', 'env', 'macd']) {
+            const score = heat[key];
+            const bar = document.getElementById(`heat-${key}`);
+            bar.style.width = typeof score === 'number' ? `${score}%` : '0%';
+            bar.parentElement.parentElement.title = typeof score === 'number'
+                ? `${key.toUpperCase()} heat ${score.toFixed(0)} / 100`
+                : `${key.toUpperCase()} heat unavailable`;
+        }
     }
 
     function renderCharts(etf, d) {
@@ -209,7 +237,14 @@
         }
     }
 
-    window.onload = loadDashboard;
+    window.onload = () => {
+        const requested = new URLSearchParams(location.search).get('etf');
+        if (requested && etfList.includes(requested.toUpperCase())) {
+            currentEtfIdx = etfList.indexOf(requested.toUpperCase());
+            document.getElementById('etfSelect').value = etfList[currentEtfIdx];
+        }
+        loadDashboard();
+    };
 </script>
 </body>
 </html>

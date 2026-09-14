@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETF Board</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0a0c10">
+    <style>
+        :root {
+            --bg: #080a0f; --panel: #11151f; --line: #1e2738;
+            --text: #e6edf7; --muted: #8b9ab4; --accent: #00ffcc;
+            --up: #2ee6a8; --down: #ff5c7a;
+        }
+        body {
+            margin: 0; min-height: 100vh; overflow-x: hidden;
+            background: radial-gradient(1200px 620px at 50% -15%, #141c2e 0%, var(--bg) 62%);
+            color: var(--text);
+            font-family: 'Segoe UI', Roboto, Helvetica, sans-serif;
+        }
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 22px; background: rgba(17, 21, 31, 0.85);
+            border-bottom: 1px solid var(--line);
+        }
+        h1 { font-size: 20px; margin: 0; letter-spacing: 1px; }
+        .controls { display: flex; gap: 12px; align-items: center; }
+        button {
+            background-color: #1a2130; color: var(--text); border: 1px solid #31405c;
+            padding: 9px 14px; border-radius: 8px; cursor: pointer; font-weight: 600;
+            font-size: 14px; transition: border-color .15s ease, background-color .15s ease;
+        }
+        button:hover { border-color: var(--accent); background-color: #212a3d; }
+        #board { padding: 10px 16px 16px; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+        th, td { padding: 7px 4px; text-align: right; white-space: nowrap; }
+        th {
+            font-size: 10px; letter-spacing: 1px; color: var(--muted);
+            text-transform: uppercase; border-bottom: 1px solid var(--line);
+        }
+        tbody tr { border-bottom: 1px solid #161d29; cursor: pointer; }
+        tbody tr:hover { background: rgba(0, 255, 204, 0.06); }
+        .ticker { text-align: left; width: 16%; }
+        .symbol { font-size: 20px; font-weight: 800; letter-spacing: 1px; }
+        .name { font-size: 11px; color: var(--muted); margin-left: 8px; }
+        .price { font-size: 15px; font-weight: 700; width: 8%; }
+        .up { color: var(--up); } .down { color: var(--down); }
+        .heat-cell { width: 5.5%; }
+        .heat-track { height: 9px; border-radius: 999px; background: #1a2130; overflow: hidden; }
+        .heat-fill {
+            height: 100%; border-radius: inherit;
+            background: linear-gradient(90deg, #3d5a80, #00ffcc 55%, #ffb020);
+        }
+        #status { padding: 18px 22px; color: var(--muted); }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>ETF BOARD</h1>
+    <div class="controls">
+        <button onclick="loadBoard()">🔄 Refresh</button>
+        <button onclick="location.href='/'">📈 Charts</button>
+    </div>
+</header>
+
+<div id="status">Loading all tickers…</div>
+<div id="board"></div>
+
+<script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js'); }
+
+    const heatKeys = ['rsi', 'env', 'macd'];
+
+    async function loadBoard() {
+        const status = document.getElementById('status');
+        status.textContent = 'Loading all tickers…';
+        status.style.display = 'block';
+
+        try {
+            const res = await fetch('/api/overview');
+            const d = await res.json();
+            renderBoard(d);
+            status.style.display = 'none';
+        } catch (e) {
+            console.error('Board fault:', e);
+            status.textContent = 'Could not load ticker data.';
+        }
+    }
+
+    function heatCell(score) {
+        if (typeof score !== 'number') return '<td class="heat-cell">—</td>';
+        return `<td class="heat-cell" title="${score.toFixed(0)} / 100">
+            <div class="heat-track"><div class="heat-fill" style="width:${score}%"></div></div>
+        </td>`;
+    }
+
+    function returnCell(pct) {
+        if (typeof pct !== 'number') return '<td>—</td>';
+        const cls = pct >= 0 ? 'up' : 'down';
+        return `<td class="${cls}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</td>`;
+    }
+
+    function renderBoard(d) {
+        const head = `<tr>
+            <th class="ticker">Ticker</th>
+            <th>Price</th>
+            ${heatKeys.map(k => `<th>${k.toUpperCase()}</th>`).join('')}
+            ${d.horizons.map(h => `<th>${h.toUpperCase()}</th>`).join('')}
+        </tr>`;
+
+        const body = d.rows.map(row => `
+            <tr onclick="location.href='/?etf=${row.etf}'">
+                <td class="ticker"><span class="symbol">${row.etf}</span><span class="name">${row.name}</span></td>
+                <td class="price">$${row.price.toFixed(2)}</td>
+                ${heatKeys.map(k => heatCell(row.heat[k])).join('')}
+                ${d.horizons.map(h => returnCell(row.returns[h])).join('')}
+            </tr>`).join('');
+
+        document.getElementById('board').innerHTML =
+            `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+    }
+
+    window.onload = loadBoard;
+</script>
+</body>
+</html>
