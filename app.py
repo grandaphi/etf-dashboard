@@ -77,13 +77,14 @@ def horizon_start_dates(index):
     }
 
 def calculate_heat(df):
-    # Buy heat (0-100) from the latest valid bar. Higher means a deeper
-    # oversold / stretched-down setup, not a recommendation.
+    # Buy heat (0-100) from the latest valid bar. RSI and the envelope score
+    # how deep the dip is, MACD scores the momentum turn. Not a recommendation.
     scores = {}
 
     rsi = df['RSI'].dropna()
     if not rsi.empty:
-        scores['rsi'] = float(np.clip(100 - rsi.iloc[-1], 0, 100))
+        # 30 and below is hot, 70 and above is cold, matching the guide lines.
+        scores['rsi'] = float(np.clip((70 - rsi.iloc[-1]) / 0.4, 0, 100))
 
     env = df[['Close', 'SMA_20']].dropna()
     if not env.empty:
@@ -93,13 +94,12 @@ def calculate_heat(df):
     hist = df['Hist'].dropna()
     if len(hist) >= 2:
         latest, prior = float(hist.iloc[-1]), float(hist.iloc[-2])
-        if latest < 0:
-            scores['macd'] = 100.0 if latest > prior else 60.0
-        else:
-            scores['macd'] = 40.0 if latest < prior else 0.0
+        crossed_up = latest >= 0 and bool((hist.tail(4).iloc[:-1] < 0).any())
 
-    if scores:
-        scores['composite'] = float(np.mean(list(scores.values())))
+        if latest >= 0:
+            scores['macd'] = 100.0 if crossed_up else (85.0 if latest > prior else 60.0)
+        else:
+            scores['macd'] = 55.0 if latest > prior else 10.0
 
     return scores
 

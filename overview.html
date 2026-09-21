@@ -70,7 +70,7 @@
 <script>
     if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js'); }
 
-    const heatKeys = ['rsi', 'env', 'macd'];
+    const heatCols = [['rsi', 'RSI'], ['env', 'ENV 5%'], ['macd', 'MACD']];
 
     async function loadBoard() {
         const status = document.getElementById('status');
@@ -105,7 +105,7 @@
         const head = `<tr>
             <th class="ticker">Ticker</th>
             <th>Price</th>
-            ${heatKeys.map(k => `<th>${k.toUpperCase()}</th>`).join('')}
+            ${heatCols.map(([, label]) => `<th>${label}</th>`).join('')}
             ${d.horizons.map(h => `<th>${h.toUpperCase()}</th>`).join('')}
         </tr>`;
 
@@ -113,7 +113,7 @@
             <tr onclick="location.href='/?etf=${row.etf}'">
                 <td class="ticker"><span class="symbol">${row.etf}</span><span class="name">${row.name}</span></td>
                 <td class="price">$${row.price.toFixed(2)}</td>
-                ${heatKeys.map(k => heatCell(row.heat[k])).join('')}
+                ${heatCols.map(([k]) => heatCell(row.heat[k])).join('')}
                 ${d.horizons.map(h => returnCell(row.returns[h])).join('')}
             </tr>`).join('');
 

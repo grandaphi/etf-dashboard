@@ -102,7 +102,7 @@
     <span id="ticker-name">International</span>
     <div id="heat-meters" title="Buy heat from the latest RSI, envelope and MACD readings">
         <div class="heat"><label>RSI</label><div class="heat-track"><div id="heat-rsi" class="heat-fill"></div></div></div>
-        <div class="heat"><label>ENV</label><div class="heat-track"><div id="heat-env" class="heat-fill"></div></div></div>
+        <div class="heat"><label>ENV 5%</label><div class="heat-track"><div id="heat-env" class="heat-fill"></div></div></div>
         <div class="heat"><label>MACD</label><div class="heat-track"><div id="heat-macd" class="heat-fill"></div></div></div>
     </div>
     <span id="ticker-price">—</span>
@@ -151,14 +151,16 @@
         renderHeat(d.heat || {});
     }
 
+    const heatLabels = { rsi: 'RSI', env: 'ENV 5%', macd: 'MACD' };
+
     function renderHeat(heat) {
-        for (const key of ['rsi', 'env', 'macd']) {
+        for (const [key, label] of Object.entries(heatLabels)) {
             const score = heat[key];
             const bar = document.getElementById(`heat-${key}`);
             bar.style.width = typeof score === 'number' ? `${score}%` : '0%';
             bar.parentElement.parentElement.title = typeof score === 'number'
-                ? `${key.toUpperCase()} heat ${score.toFixed(0)} / 100`
-                : `${key.toUpperCase()} heat unavailable`;
+                ? `${label} heat ${score.toFixed(0)} / 100`
+                : `${label} heat unavailable`;
         }
     }
 
